@@ -30,7 +30,12 @@ async function bootstrap() {
   // ─── CORS ────────────────────────────────────────────────
   // Permite o frontend React e ferramentas de dev
   app.enableCors({
-    origin: [frontendUrl, 'http://localhost:3000', 'http://localhost:5173'],
+    origin: [
+      frontendUrl,
+      'https://germinapedia.onrender.com',
+      'http://localhost:3000',
+      'http://localhost:5173',
+    ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
