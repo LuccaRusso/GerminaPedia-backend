@@ -41,6 +41,13 @@ export class WikisController {
     });
   }
 
+  // GET /api/v1/wikis/id/:id — busca por ID (para o editor)
+  @Get('id/:id')
+  @ApiOperation({ summary: 'Buscar wiki pelo ID' })
+  findById(@Param('id') id: string) {
+    return this.wikisService.findById(id);
+  }
+
   // GET /api/v1/wikis/:slug — público
   @Get(':slug')
   @ApiOperation({ summary: 'Buscar wiki pelo slug' })
