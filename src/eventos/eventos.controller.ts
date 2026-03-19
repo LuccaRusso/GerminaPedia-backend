@@ -1,4 +1,3 @@
-// src/eventos/eventos.controller.ts
 import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards, Query } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
@@ -14,8 +13,16 @@ export class EventosController {
   constructor(private readonly eventosService: EventosService) {}
 
   @Get()
-  findAll(@Query('tipo') tipo?: string, @Query('search') search?: string, @Query('page') page?: number) {
-    return this.eventosService.findAll({ tipo, search, page });
+  findAll(
+    @Query('tipo') tipo?: string,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+  ) {
+    return this.eventosService.findAll({
+      tipo,
+      search,
+      page: page ? parseInt(page, 10) : 1,
+    });
   }
 
   @Get(':id')
@@ -23,22 +30,23 @@ export class EventosController {
     return this.eventosService.findOne(id);
   }
 
+  // Qualquer logado pode criar
   @Post()
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.EDITOR)
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT')
   create(@Body() dto: CreateEventoDto) {
     return this.eventosService.create(dto);
   }
 
+  // Qualquer logado pode editar
   @Put(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.EDITOR)
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT')
   update(@Param('id') id: string, @Body() dto: Partial<CreateEventoDto>) {
     return this.eventosService.update(id, dto);
   }
 
+  // Apenas ADMIN deleta
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)

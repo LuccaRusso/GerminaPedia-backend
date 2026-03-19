@@ -1,4 +1,3 @@
-// src/historias/historias.controller.ts
 import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards, Query } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
@@ -17,12 +16,12 @@ export class HistoriasController {
   findAll(
     @Query('destaque') destaque?: string,
     @Query('search') search?: string,
-    @Query('page') page?: number,
+    @Query('page') page?: string,
   ) {
     return this.historiasService.findAll({
       destaque: destaque === 'true' ? true : destaque === 'false' ? false : undefined,
       search,
-      page,
+      page: page ? parseInt(page, 10) : 1,
     });
   }
 
@@ -31,22 +30,23 @@ export class HistoriasController {
     return this.historiasService.findOne(id);
   }
 
+  // Qualquer logado pode criar
   @Post()
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.EDITOR)
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT')
   create(@Body() dto: CreateHistoriaDto) {
     return this.historiasService.create(dto);
   }
 
+  // Qualquer logado pode editar
   @Put(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.EDITOR)
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT')
   update(@Param('id') id: string, @Body() dto: Partial<CreateHistoriaDto>) {
     return this.historiasService.update(id, dto);
   }
 
+  // Apenas ADMIN deleta
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)

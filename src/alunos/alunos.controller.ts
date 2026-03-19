@@ -1,4 +1,3 @@
-// src/alunos/alunos.controller.ts
 import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
@@ -18,10 +17,15 @@ export class AlunosController {
   findAll(
     @Query('salaId') salaId?: string,
     @Query('search') search?: string,
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
-    return this.alunosService.findAll({ salaId, search, page, limit });
+    return this.alunosService.findAll({
+      salaId,
+      search,
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 20,
+    });
   }
 
   @Get(':id')
@@ -30,22 +34,23 @@ export class AlunosController {
     return this.alunosService.findOne(id);
   }
 
+  // Qualquer usuário logado pode criar
   @Post()
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.EDITOR)
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT')
   create(@Body() dto: CreateAlunoDto) {
     return this.alunosService.create(dto);
   }
 
+  // Qualquer logado pode editar (sem ownership em alunos — são entidades da escola)
   @Put(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.EDITOR)
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT')
   update(@Param('id') id: string, @Body() dto: Partial<CreateAlunoDto>) {
     return this.alunosService.update(id, dto);
   }
 
+  // Apenas ADMIN deleta
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)

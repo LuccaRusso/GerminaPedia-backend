@@ -1,7 +1,7 @@
 // src/wikis/wikis.controller.ts
 import {
   Controller, Get, Post, Put, Delete, Param, Body,
-  UseGuards, Query, HttpCode, HttpStatus,
+  UseGuards, Query, HttpCode, HttpStatus, ForbiddenException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
@@ -28,11 +28,17 @@ export class WikisController {
   findAll(
     @Query('tipo') tipo?: string,
     @Query('status') status?: string,
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
     @Query('search') search?: string,
   ) {
-    return this.wikisService.findAll({ tipo, status, page, limit, search });
+    return this.wikisService.findAll({
+      tipo,
+      status,
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 20,
+      search,
+    });
   }
 
   // GET /api/v1/wikis/:slug — público
@@ -42,38 +48,47 @@ export class WikisController {
     return this.wikisService.findBySlug(slug);
   }
 
-  // POST /api/v1/wikis — apenas ADMIN e EDITOR
+  // POST /api/v1/wikis — qualquer usuário logado
   @Post()
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.EDITOR)
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT')
-  @ApiOperation({ summary: 'Criar nova wiki (ADMIN/EDITOR)' })
+  @ApiOperation({ summary: 'Criar nova wiki (qualquer usuário logado)' })
   create(@Body() dto: CreateWikiDto, @CurrentUser() user: any) {
     return this.wikisService.create(dto, user.id);
   }
 
-  // PUT /api/v1/wikis/:id — apenas ADMIN e EDITOR
+  // PUT /api/v1/wikis/:id — autor ou ADMIN/EDITOR
   @Put(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.EDITOR)
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT')
-  @ApiOperation({ summary: 'Atualizar wiki — gera nova versão no histórico' })
-  update(
+  @ApiOperation({ summary: 'Atualizar wiki — autor ou ADMIN/EDITOR' })
+  async update(
     @Param('id') id: string,
     @Body() dto: UpdateWikiDto,
     @CurrentUser() user: any,
   ) {
+    const wiki = await this.wikisService.findById(id);
+    const isOwner = wiki.criadoPorId === user.id;
+    const isPrivileged = user.role === 'ADMIN' || user.role === 'EDITOR';
+    if (!isOwner && !isPrivileged) {
+      throw new ForbiddenException('Você só pode editar wikis que criou');
+    }
     return this.wikisService.update(id, dto, user.id);
   }
 
-  // DELETE /api/v1/wikis/:id — apenas ADMIN
+  // DELETE /api/v1/wikis/:id — autor ou ADMIN
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN)
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Deletar wiki (apenas ADMIN)' })
-  remove(@Param('id') id: string) {
+  @ApiOperation({ summary: 'Deletar wiki — autor ou ADMIN' })
+  async remove(@Param('id') id: string, @CurrentUser() user: any) {
+    const wiki = await this.wikisService.findById(id);
+    const isOwner = wiki.criadoPorId === user.id;
+    const isAdmin = user.role === 'ADMIN';
+    if (!isOwner && !isAdmin) {
+      throw new ForbiddenException('Você só pode deletar wikis que criou');
+    }
     return this.wikisService.remove(id);
   }
 
