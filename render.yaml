@@ -1,0 +1,27 @@
+# render.yaml — Configuração de infra como código para o Render
+# https://render.com/docs/infrastructure-as-code
+
+services:
+  - type: web
+    name: germinapedia-api
+    runtime: node
+    region: oregon
+    plan: free
+    branch: main
+    buildCommand: npm install && npx prisma generate && npm run build
+    startCommand: npx prisma migrate deploy && node dist/main
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false   # será preenchida no painel do Render
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: PORT
+        value: 10000  # Render usa porta 10000 por padrão no free tier
+      - key: FRONTEND_URL
+        value: https://germinapedia.vercel.app
+    healthCheckPath: /api/v1/search?q=test
+    autoDeploy: true
