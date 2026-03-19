@@ -1,0 +1,11 @@
+// src/alunos/alunos.module.ts
+import { Module } from '@nestjs/common';
+import { AlunosController } from './alunos.controller';
+import { AlunosService } from './alunos.service';
+
+@Module({
+  controllers: [AlunosController],
+  providers: [AlunosService],
+  exports: [AlunosService],
+})
+export class AlunosModule {}

@@ -1,0 +1,320 @@
+// ============================================================
+// GerminaPedia — Schema Prisma
+// ORM: Prisma 5  |  DB: PostgreSQL
+// ============================================================
+// Decisão: Prisma sobre TypeORM por:
+//   - Type-safety end-to-end (geração automática de tipos)
+//   - Migrations declarativas e controladas
+//   - Prisma Studio para inspeção visual
+//   - Melhor DX com autocompletar
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum Role {
+  ADMIN   // pode tudo: criar, editar, deletar, gerenciar usuários
+  EDITOR  // pode criar e editar wikis/entidades
+  READER  // apenas visualização
+}
+
+enum WikiType {
+  ALUNO      // wiki de um aluno específico
+  SALA       // wiki de uma turma/sala
+  EVENTO     // wiki de um evento/acontecimento
+  HISTORIA   // wiki de uma história
+  GERAL      // wiki de conteúdo geral
+}
+
+enum WikiStatus {
+  DRAFT      // rascunho, não visível publicamente
+  PUBLISHED  // publicada e visível
+  ARCHIVED   // arquivada, mantida para histórico
+}
+
+// ─────────────────────────────────────────────
+// USUÁRIOS
+// ─────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  password  String   // bcrypt hash
+  role      Role     @default(READER)
+  avatar    String?  // URL do avatar
+  bio       String?  // bio curta
+  isActive  Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relações
+  wikisCreated    Wiki[]        @relation("WikiCreatedBy")
+  wikisUpdated    Wiki[]        @relation("WikiUpdatedBy")
+  wikiVersions    WikiVersion[]
+  comments        Comment[]
+
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────
+// SALAS (Turmas por ano)
+// ─────────────────────────────────────────────
+
+model Sala {
+  id          String  @id @default(uuid())
+  nome        String  // ex: "Turma A", "6º Ano B"
+  ano         Int     // ex: 2022, 2023
+  descricao   String?
+  turno       String? // Manhã, Tarde, Noite
+  capacidade  Int?
+  imagemUrl   String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relações
+  alunos      Aluno[]
+  eventos     EventoSala[]
+  wiki        Wiki?    @relation(fields: [wikiId], references: [id])
+  wikiId      String?  @unique
+
+  @@unique([nome, ano])
+  @@map("salas")
+}
+
+// ─────────────────────────────────────────────
+// ALUNOS
+// ─────────────────────────────────────────────
+
+model Aluno {
+  id          String   @id @default(uuid())
+  nome        String
+  matricula   String?  @unique
+  email       String?
+  telefone    String?
+  dataNasc    DateTime?
+  fotoUrl     String?
+  bio         String?
+  ativo       Boolean  @default(true)
+
+  // FK para sala
+  sala        Sala     @relation(fields: [salaId], references: [id])
+  salaId      String
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relações
+  eventos     EventoAluno[]
+  historias   HistoriaAluno[]
+  wiki        Wiki?    @relation(fields: [wikiId], references: [id])
+  wikiId      String?  @unique
+
+  @@map("alunos")
+}
+
+// ─────────────────────────────────────────────
+// EVENTOS / ACONTECIMENTOS
+// ─────────────────────────────────────────────
+
+model Evento {
+  id          String    @id @default(uuid())
+  titulo      String
+  descricao   String?
+  dataInicio  DateTime
+  dataFim     DateTime?
+  local       String?
+  tipo        String?   // ex: "Excursão", "Formatura", "Festa", "Reunião"
+  imagemUrl   String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relações N:N
+  salas       EventoSala[]
+  alunos      EventoAluno[]
+  historias   HistoriaEvento[]
+  wiki        Wiki?    @relation(fields: [wikiId], references: [id])
+  wikiId      String?  @unique
+
+  @@map("eventos")
+}
+
+// Tabela pivot: Eventos ↔ Salas
+model EventoSala {
+  evento   Evento @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  eventoId String
+  sala     Sala   @relation(fields: [salaId], references: [id], onDelete: Cascade)
+  salaId   String
+
+  @@id([eventoId, salaId])
+  @@map("eventos_salas")
+}
+
+// Tabela pivot: Eventos ↔ Alunos
+model EventoAluno {
+  evento   Evento @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  eventoId String
+  aluno    Aluno  @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+  alunoId  String
+
+  @@id([eventoId, alunoId])
+  @@map("eventos_alunos")
+}
+
+// ─────────────────────────────────────────────
+// HISTÓRIAS
+// ─────────────────────────────────────────────
+
+model Historia {
+  id          String    @id @default(uuid())
+  titulo      String
+  descricao   String?
+  data        DateTime?
+  imagemUrl   String?
+  destaque    Boolean   @default(false) // aparece na home
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relações N:N
+  alunos      HistoriaAluno[]
+  eventos     HistoriaEvento[]
+  wiki        Wiki?    @relation(fields: [wikiId], references: [id])
+  wikiId      String?  @unique
+
+  @@map("historias")
+}
+
+// Tabela pivot: Histórias ↔ Alunos
+model HistoriaAluno {
+  historia   Historia @relation(fields: [historiaId], references: [id], onDelete: Cascade)
+  historiaId String
+  aluno      Aluno    @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+  alunoId    String
+
+  @@id([historiaId, alunoId])
+  @@map("historias_alunos")
+}
+
+// Tabela pivot: Histórias ↔ Eventos
+model HistoriaEvento {
+  historia   Historia @relation(fields: [historiaId], references: [id], onDelete: Cascade)
+  historiaId String
+  evento     Evento   @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  eventoId   String
+
+  @@id([historiaId, eventoId])
+  @@map("historias_eventos")
+}
+
+// ─────────────────────────────────────────────
+// WIKIS (conteúdo central)
+// ─────────────────────────────────────────────
+
+model Wiki {
+  id          String     @id @default(uuid())
+  slug        String     @unique // URL amigável: "turma-2022-evento-formatura"
+  titulo      String
+  resumo      String?    // meta description
+  conteudo    String     @db.Text // Markdown
+  tipo        WikiType
+  status      WikiStatus @default(DRAFT)
+  tags        String[]   // array de tags para busca
+  visualizacoes Int      @default(0)
+  imagemUrl   String?
+
+  // Quem criou e editou por último
+  criadoPor   User   @relation("WikiCreatedBy", fields: [criadoPorId], references: [id])
+  criadoPorId String
+  editadoPor   User?  @relation("WikiUpdatedBy", fields: [editadoPorId], references: [id])
+  editadoPorId String?
+
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  // Relações — cada entidade pode ter UMA wiki (1:1)
+  aluno       Aluno?
+  sala        Sala?
+  evento      Evento?
+  historia    Historia?
+
+  // Histórico de versões
+  versoes     WikiVersion[]
+
+  // Comentários
+  comentarios Comment[]
+
+  @@map("wikis")
+}
+
+// ─────────────────────────────────────────────
+// VERSÕES DAS WIKIS (histórico de edições)
+// ─────────────────────────────────────────────
+
+model WikiVersion {
+  id          String   @id @default(uuid())
+  conteudo    String   @db.Text // snapshot do conteúdo
+  titulo      String
+  numero      Int      // 1, 2, 3... incrementado a cada edição
+  comentario  String?  // motivo da edição (opcional)
+  diff        String?  @db.Text // diff entre versões (opcional, para UI)
+
+  wiki        Wiki     @relation(fields: [wikiId], references: [id], onDelete: Cascade)
+  wikiId      String
+
+  autor       User     @relation(fields: [autorId], references: [id])
+  autorId     String
+
+  createdAt   DateTime @default(now())
+
+  @@index([wikiId, numero])
+  @@map("wiki_versions")
+}
+
+// ─────────────────────────────────────────────
+// COMENTÁRIOS
+// ─────────────────────────────────────────────
+
+model Comment {
+  id        String   @id @default(uuid())
+  conteudo  String
+  isEdited  Boolean  @default(false)
+
+  wiki      Wiki     @relation(fields: [wikiId], references: [id], onDelete: Cascade)
+  wikiId    String
+
+  autor     User     @relation(fields: [autorId], references: [id])
+  autorId   String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("comments")
+}
+
+// ─────────────────────────────────────────────
+// TAGS (índice de busca — denormalized)
+// As tags também ficam como array no Wiki para busca simples.
+// Esta tabela serve para autocomplete e contagem.
+// ─────────────────────────────────────────────
+
+model Tag {
+  id    String @id @default(uuid())
+  nome  String @unique
+  count Int    @default(0) // quantas wikis usam essa tag
+
+  @@map("tags")
+}
