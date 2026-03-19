@@ -12,7 +12,8 @@ export class SearchController {
   @ApiOperation({ summary: 'Busca global em wikis, alunos, salas, eventos e histórias' })
   @ApiQuery({ name: 'q', description: 'Termo de busca (mínimo 2 caracteres)' })
   @ApiQuery({ name: 'limit', required: false, type: Number })
-  search(@Query('q') q: string, @Query('limit') limit?: number) {
-    return this.searchService.globalSearch(q, limit);
+  search(@Query('q') q: string, @Query('limit') limit?: string) {
+    const parsedLimit = limit ? parseInt(limit, 10) : 10;
+    return this.searchService.globalSearch(q, parsedLimit);
   }
 }
