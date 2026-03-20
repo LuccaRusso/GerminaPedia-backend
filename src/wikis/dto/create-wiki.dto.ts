@@ -1,6 +1,7 @@
 // src/wikis/dto/create-wiki.dto.ts
 import {
   IsString, IsEnum, IsOptional, IsArray, MinLength, IsUrl,
+  IsInt, IsBoolean, IsDateString, Min, Max,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { WikiType, WikiStatus } from '@prisma/client';
@@ -30,7 +31,7 @@ export class CreateWikiDto {
   @IsEnum(WikiType)
   tipo: WikiType;
 
-  @ApiPropertyOptional({ enum: WikiStatus, default: WikiStatus.DRAFT })
+  @ApiPropertyOptional({ enum: WikiStatus, default: WikiStatus.PUBLISHED })
   @IsOptional()
   @IsEnum(WikiStatus)
   status?: WikiStatus;
@@ -41,6 +42,7 @@ export class CreateWikiDto {
   @IsString({ each: true })
   tags?: string[];
 
+  // ─── FKs para vincular entidades já existentes ───────────────
   @ApiPropertyOptional({ example: 'uuid-da-sala' })
   @IsOptional()
   @IsString()
@@ -70,4 +72,45 @@ export class CreateWikiDto {
   @IsOptional()
   @IsString()
   comentarioVersao?: string;
+
+  // ─── Campos extras para auto-criação da entidade ─────────────
+  // Usados quando o usuário não vinculou uma entidade existente
+
+  @ApiPropertyOptional({ example: 2025, description: 'Ano da sala (tipo=SALA)' })
+  @IsOptional()
+  @IsInt()
+  @Min(2000)
+  @Max(2100)
+  extraAno?: number;
+
+  @ApiPropertyOptional({ example: 'Manhã', description: 'Turno da sala (tipo=SALA)' })
+  @IsOptional()
+  @IsString()
+  extraTurno?: string;
+
+  @ApiPropertyOptional({ example: '2022001', description: 'Matrícula do aluno (tipo=ALUNO)' })
+  @IsOptional()
+  @IsString()
+  extraMatricula?: string;
+
+  @ApiPropertyOptional({ example: '2022-12-10', description: 'Data do evento (tipo=EVENTO)' })
+  @IsOptional()
+  @IsDateString()
+  extraDataInicio?: string;
+
+  @ApiPropertyOptional({ example: 'Formatura', description: 'Tipo do evento (tipo=EVENTO)' })
+  @IsOptional()
+  @IsString()
+  extraTipoEvento?: string;
+
+  @ApiPropertyOptional({ example: 'Auditório', description: 'Local do evento (tipo=EVENTO)' })
+  @IsOptional()
+  @IsString()
+  extraLocal?: string;
+
+  @ApiPropertyOptional({ example: false, description: 'Destaque na home (tipo=HISTORIA)' })
+  @IsOptional()
+  @IsBoolean()
+  extraDestaque?: boolean;
 }
+

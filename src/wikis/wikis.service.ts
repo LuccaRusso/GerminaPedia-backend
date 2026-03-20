@@ -27,12 +27,89 @@ export class WikisService {
 
   // ─── CRIAR WIKI ──────────────────────────────────────────
   async create(dto: CreateWikiDto, userId: string) {
-    // Verifica se slug já existe (slug é a URL pública, deve ser único)
+    // Verifica se slug já existe
     const existing = await this.prisma.wiki.findUnique({ where: { slug: dto.slug } });
     if (existing) {
       throw new ConflictException(`Slug "${dto.slug}" já está em uso`);
     }
 
+    // ── Auto-cria a entidade correspondente se não foi vinculada manualmente ──
+    // Garante que toda wiki com tipo específico tenha sua entidade na tabela certa.
+    let resolvedSalaId     = dto.salaId;
+    let resolvedAlunoId    = dto.alunoId;
+    let resolvedEventoId   = dto.eventoId;
+    let resolvedHistoriaId = dto.historiaId;
+
+    const anoAtual = new Date().getFullYear();
+
+    if (dto.tipo === 'SALA' && !dto.salaId) {
+      // Cria a Sala automaticamente com os dados da wiki
+      const sala = await this.prisma.sala.create({
+        data: {
+          nome: dto.titulo,
+          ano: dto.extraAno ?? anoAtual,
+          descricao: dto.resumo,
+          turno: dto.extraTurno,
+        },
+      });
+      resolvedSalaId = sala.id;
+      this.logger.log(`Sala auto-criada: "${sala.nome}" (${sala.ano}) para wiki ${dto.slug}`);
+    }
+
+    if (dto.tipo === 'ALUNO' && !dto.alunoId) {
+      // Aluno precisa de uma sala — usa salaId fornecida; sem ela, cria sala genérica
+      let salaParaAluno = resolvedSalaId;
+      if (!salaParaAluno) {
+        const sala = await this.prisma.sala.create({
+          data: {
+            nome: `Turma — ${anoAtual}`,
+            ano: anoAtual,
+            descricao: 'Turma criada automaticamente',
+          },
+        });
+        salaParaAluno = sala.id;
+        resolvedSalaId = sala.id;
+        this.logger.log(`Sala genérica auto-criada para aluno: ${sala.id}`);
+      }
+      const aluno = await this.prisma.aluno.create({
+        data: {
+          nome: dto.titulo,
+          matricula: dto.extraMatricula,
+          bio: dto.resumo,
+          salaId: salaParaAluno,
+        },
+      });
+      resolvedAlunoId = aluno.id;
+      this.logger.log(`Aluno auto-criado: "${aluno.nome}" para wiki ${dto.slug}`);
+    }
+
+    if (dto.tipo === 'EVENTO' && !dto.eventoId) {
+      const evento = await this.prisma.evento.create({
+        data: {
+          titulo: dto.titulo,
+          descricao: dto.resumo,
+          dataInicio: dto.extraDataInicio ? new Date(dto.extraDataInicio) : new Date(),
+          tipo: dto.extraTipoEvento,
+          local: dto.extraLocal,
+        },
+      });
+      resolvedEventoId = evento.id;
+      this.logger.log(`Evento auto-criado: "${evento.titulo}" para wiki ${dto.slug}`);
+    }
+
+    if (dto.tipo === 'HISTORIA' && !dto.historiaId) {
+      const historia = await this.prisma.historia.create({
+        data: {
+          titulo: dto.titulo,
+          descricao: dto.resumo,
+          destaque: dto.extraDestaque ?? false,
+        },
+      });
+      resolvedHistoriaId = historia.id;
+      this.logger.log(`História auto-criada: "${historia.titulo}" para wiki ${dto.slug}`);
+    }
+
+    // ── Cria a Wiki vinculada à entidade (nova ou existente) ──
     const wiki = await this.prisma.wiki.create({
       data: {
         slug: dto.slug,
@@ -40,17 +117,15 @@ export class WikisService {
         resumo: dto.resumo,
         conteudo: dto.conteudo,
         tipo: dto.tipo,
-        status: dto.status ?? WikiStatus.DRAFT,
+        status: dto.status ?? WikiStatus.PUBLISHED,
         tags: dto.tags ?? [],
         imagemUrl: dto.imagemUrl,
         criadoPorId: userId,
         editadoPorId: userId,
-        // Conecta com entidades relacionadas se fornecidas
-        ...(dto.salaId && { sala: { connect: { id: dto.salaId } } }),
-        ...(dto.alunoId && { aluno: { connect: { id: dto.alunoId } } }),
-        ...(dto.eventoId && { evento: { connect: { id: dto.eventoId } } }),
-        ...(dto.historiaId && { historia: { connect: { id: dto.historiaId } } }),
-        // Cria a versão 1 automaticamente
+        ...(resolvedSalaId    && { sala:    { connect: { id: resolvedSalaId } } }),
+        ...(resolvedAlunoId   && { aluno:   { connect: { id: resolvedAlunoId } } }),
+        ...(resolvedEventoId  && { evento:  { connect: { id: resolvedEventoId } } }),
+        ...(resolvedHistoriaId && { historia: { connect: { id: resolvedHistoriaId } } }),
         versoes: {
           create: {
             titulo: dto.titulo,
@@ -64,9 +139,7 @@ export class WikisService {
       include: this.wikiIncludes(),
     });
 
-    this.logger.log(`Wiki criada: ${wiki.slug} por ${userId}`);
-
-    // Emite evento real-time para todos os clientes conectados
+    this.logger.log(`Wiki criada: ${wiki.slug} (tipo: ${wiki.tipo}) por ${userId}`);
     this.wikiGateway.emitWikiCreated(wiki);
 
     return wiki;
